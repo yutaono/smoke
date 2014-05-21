@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>smoke</title>
+</head>
+<body>
+  <div>
+    <span>detail : </span><input type='text' id='detail' value='9'>,
+    <span>roughness : </span><input type='text' id='roughness' value='0.7'>
+  </div>
+  <button id='generate'>generate</button>
+
+  <canvas id='display' width='1' height='1'></canvas>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+  <script type="text/javascript">
+  function Smoke(detail) {
+    this.size = Math.pow(2, detail) + 1;
+    this.max = this.size - 1;
+    this.map = new Float32Array(this.size * this.size);
+  }
+
+  Smoke.prototype.get = function(x, y) {
+    if (x < 0 || x > this.max || y < 0 || y > this.max) return -1;
+    return this.map[x + this.size * y];
+  };
+
+  Smoke.prototype.set = function(x, y, val) {
+    this.map[x + this.size * y] = val;
+  };
+
+  Smoke.prototype.generate = function(roughness) {
+    var self = this;
+
+    // 角の4点をセット
+    this.set(0, 0, self.max);
+    this.set(this.max, 0, self.max / 2);
+    this.set(this.max, this.max, 0);
+    this.set(0, this.max, self.max / 2);
+
+    divide(this.max);
+
+    function divide(size) {
+      var x, y, half = size / 2;
+      var scale = roughness * size;
+      if (half < 1) return;
+
+      for (y = half; y < self.max; y += size) {
+        for (x = half; x < self.max; x += size) {
+            square(x, y, half, Math.random() * scale * 2 - scale);
+        }
+      }
+      for (y = 0; y <= self.max; y += half) {
+        for (x = (y + half) % size; x <= self.max; x += size) {
+          diamond(x, y, half, Math.random() * scale * 2 - scale);
+        }
+      }
+      divide(size / 2);
+    }
+
+    function average(values) {
+      var valid = values.filter(function(val) { return val !== -1; });
+      var total = valid.reduce(function(sum, val) { return sum + val; }, 0);
+      return total / valid.length;
+    }
+
+    function square(x, y, size, offset) {
+      var ave = average([
+        self.get(x - size, y - size),
+        self.get(x + size, y - size),
+        self.get(x + size, y + size),
+        self.get(x - size, y + size)
+      ]);
+      self.set(x, y, ave + offset);
+    }
+
+    function diamond(x, y, size, offset) {
+      var ave = average([
+        self.get(x, y - size),      // top
+        self.get(x + size, y),      // right
+        self.get(x, y + size),      // bottom
+        self.get(x - size, y)       // left
+      ]);
+
+      self.set(x, y, ave + offset);
+    }
+  };
+
+  Smoke.prototype.draw = function(context, width, height) {
+    var self = this;
+
+    var minmax = minAndMax();
+    var min = minmax.min;
+    var max = minmax.max;
+
+    for (var y = 0; y < this.size; y++) {
+      for (var x = 0; x < this.size; x++) {
+        var val = (this.get(x, y) - min)/(max - min);
+        context.fillStyle = 'rgba(0, 0, 0, ' + val + ')';
+        context.fillRect(x, y, 1, 1);
+      }
+    }
+
+    function minAndMax() {
+      var max = self.get(0, 0);
+      var min = self.get(0, 0);
+      for (var y = 1; y < self.size; y++) {
+        for (var x = 1; x < self.size; x++) {
+          var val = self.get(x, y);
+          if (val > max) {
+            max = val;
+          } else if (val < min) {
+            min = val;
+          }
+        }
+      }
+      return {min: min, max: max};
+    }
+  };
+
+
+  var display = document.getElementById('display');
+  var context = display.getContext('2d');
+  var width = display.width = window.innerWidth;
+  var height = display.height = window.innerHeight;
+
+  $('#generate').on('click', function(){
+      context.clearRect(0, 0, width, height);
+      var detail = $('#detail').val();
+      var roughness = $('#roughness').val();
+      var smoke = new Smoke(detail);
+      smoke.generate(roughness);
+      smoke.draw(context, width, height);
+  });
+
+  </script>
+</body>
+</html>
